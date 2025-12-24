@@ -17,6 +17,8 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
     on<UpdateSpeechSpeedEvent>(_onUpdateSpeechSpeed);
     on<ToggleDarkModeEvent>(_onToggleDarkMode);
     on<UpdateApiKeyEvent>(_onUpdateApiKey);
+    on<UpdateGeminiApiKeyEvent>(_onUpdateGeminiApiKey);
+    on<UpdateAIProviderEvent>(_onUpdateAIProvider);
     on<ClearCacheEvent>(_onClearCache);
     on<ResetSettingsEvent>(_onResetSettings);
   }
@@ -29,16 +31,26 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
 
     final settingsResult = await settingsRepository.getSettings();
     final apiKeyResult = await settingsRepository.getApiKey();
+    final geminiKeyResult = await settingsRepository.getGeminiApiKey();
 
     settingsResult.fold(
       (failure) => emit(SettingsError(failure.message)),
       (settings) {
         String? apiKey;
+        String? geminiApiKey;
         apiKeyResult.fold(
           (_) => apiKey = null,
           (key) => apiKey = key,
         );
-        emit(SettingsLoaded(settings: settings, apiKey: apiKey));
+        geminiKeyResult.fold(
+          (_) => geminiApiKey = null,
+          (key) => geminiApiKey = key,
+        );
+        emit(SettingsLoaded(
+          settings: settings,
+          apiKey: apiKey,
+          geminiApiKey: geminiApiKey,
+        ));
       },
     );
   }
@@ -112,6 +124,41 @@ class SettingsBloc extends Bloc<SettingsEvent, SettingsState> {
       result.fold(
         (failure) => emit(SettingsError(failure.message)),
         (_) => emit(currentState.copyWith(apiKey: event.apiKey)),
+      );
+    }
+  }
+
+  Future<void> _onUpdateGeminiApiKey(
+    UpdateGeminiApiKeyEvent event,
+    Emitter<SettingsState> emit,
+  ) async {
+    if (state is SettingsLoaded) {
+      final currentState = state as SettingsLoaded;
+
+      final result = await settingsRepository.saveGeminiApiKey(event.apiKey);
+
+      result.fold(
+        (failure) => emit(SettingsError(failure.message)),
+        (_) => emit(currentState.copyWith(geminiApiKey: event.apiKey)),
+      );
+    }
+  }
+
+  Future<void> _onUpdateAIProvider(
+    UpdateAIProviderEvent event,
+    Emitter<SettingsState> emit,
+  ) async {
+    if (state is SettingsLoaded) {
+      final currentState = state as SettingsLoaded;
+      final updatedSettings = currentState.settings.copyWith(
+        aiProvider: event.provider,
+      );
+
+      final result = await settingsRepository.updateSettings(updatedSettings);
+
+      result.fold(
+        (failure) => emit(SettingsError(failure.message)),
+        (_) => emit(currentState.copyWith(settings: updatedSettings)),
       );
     }
   }

@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 
@@ -8,7 +10,9 @@ import '../../../domain/usecases/interview/start_interview_usecase.dart';
 import '../../../domain/usecases/interview/submit_answer_usecase.dart';
 import '../../../domain/usecases/interview/get_feedback_usecase.dart';
 import '../../../domain/usecases/progress/update_progress_usecase.dart';
+import '../../../domain/repositories/settings_repository.dart';
 import '../../../data/datasources/remote/groq_api_service.dart';
+import '../../../data/datasources/remote/gemini_api_service.dart';
 
 part 'interview_event.dart';
 part 'interview_state.dart';
@@ -19,11 +23,14 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
   final GetFeedbackUseCase getFeedbackUseCase;
   final UpdateProgressUseCase updateProgressUseCase;
   final GroqApiService groqApiService;
+  final GeminiApiService geminiApiService;
+  final SettingsRepository settingsRepository;
 
   InterviewSession? _currentSession;
   List<InterviewQuestion> _questions = [];
   int _currentQuestionIndex = 0;
   ParsedResume? _resume;
+  AIProvider _currentProvider = AIProvider.gemini;
 
   InterviewBloc({
     required this.startInterviewUseCase,
@@ -31,6 +38,8 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
     required this.getFeedbackUseCase,
     required this.updateProgressUseCase,
     required this.groqApiService,
+    required this.geminiApiService,
+    required this.settingsRepository,
   }) : super(InterviewInitial()) {
     on<StartInterviewEvent>(_onStartInterview);
     on<StartRecordingEvent>(_onStartRecording);
@@ -51,14 +60,81 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
     _resume = event.resume;
 
     try {
-      // Generate questions using Groq API
-      final questionTexts = await groqApiService.generateInterviewQuestions(
-        targetRole: event.targetRole ?? 'Software Engineer',
-        interviewType: event.interviewType,
-        category: event.questionCategory ?? QuestionCategory.behavioral,
-        resume: _resume,
-        count: event.interviewType.questionCount,
+      // Load settings to get AI provider
+      developer.log('InterviewBloc: Loading settings...', name: 'InterviewBloc');
+      final settingsResult = await settingsRepository.getSettings();
+
+      settingsResult.fold(
+        (failure) {
+          developer.log('InterviewBloc: Failed to load settings: ${failure.message}', name: 'InterviewBloc');
+        },
+        (settings) {
+          _currentProvider = settings.aiProvider;
+          developer.log('InterviewBloc: AI Provider: ${_currentProvider.displayName}', name: 'InterviewBloc');
+        },
       );
+
+      // Load appropriate API key based on provider
+      String? apiKey;
+      if (_currentProvider == AIProvider.gemini) {
+        developer.log('InterviewBloc: Loading Gemini API key...', name: 'InterviewBloc');
+        final geminiKeyResult = await settingsRepository.getGeminiApiKey();
+        geminiKeyResult.fold(
+          (failure) => developer.log('InterviewBloc: Failed to load Gemini API key: ${failure.message}', name: 'InterviewBloc'),
+          (key) => apiKey = key,
+        );
+
+        if (apiKey == null || apiKey!.isEmpty) {
+          emit(const InterviewError('Gemini API key not configured. Please add your Gemini API key in Settings.'));
+          return;
+        }
+
+        geminiApiService.setApiKey(apiKey!);
+        developer.log('InterviewBloc: Gemini API key set (${apiKey!.length} chars)', name: 'InterviewBloc');
+      } else {
+        developer.log('InterviewBloc: Loading Groq API key...', name: 'InterviewBloc');
+        final groqKeyResult = await settingsRepository.getApiKey();
+        groqKeyResult.fold(
+          (failure) => developer.log('InterviewBloc: Failed to load Groq API key: ${failure.message}', name: 'InterviewBloc'),
+          (key) => apiKey = key,
+        );
+
+        if (apiKey == null || apiKey!.isEmpty) {
+          emit(const InterviewError('Groq API key not configured. Please add your Groq API key in Settings.'));
+          return;
+        }
+
+        groqApiService.setApiKey(apiKey!);
+        developer.log('InterviewBloc: Groq API key set (${apiKey!.length} chars)', name: 'InterviewBloc');
+      }
+
+      // Generate questions using selected AI provider
+      developer.log('InterviewBloc: Generating interview questions with ${_currentProvider.displayName}...', name: 'InterviewBloc');
+      developer.log('InterviewBloc: Target role: ${event.targetRole ?? "Software Engineer"}', name: 'InterviewBloc');
+      developer.log('InterviewBloc: Interview type: ${event.interviewType}', name: 'InterviewBloc');
+      developer.log('InterviewBloc: Category: ${event.questionCategory ?? QuestionCategory.behavioral}', name: 'InterviewBloc');
+      developer.log('InterviewBloc: Question count: ${event.interviewType.questionCount}', name: 'InterviewBloc');
+
+      List<String> questionTexts;
+      if (_currentProvider == AIProvider.gemini) {
+        questionTexts = await geminiApiService.generateInterviewQuestions(
+          targetRole: event.targetRole ?? 'Software Engineer',
+          interviewType: event.interviewType,
+          category: event.questionCategory ?? QuestionCategory.behavioral,
+          resume: _resume,
+          count: event.interviewType.questionCount,
+        );
+      } else {
+        questionTexts = await groqApiService.generateInterviewQuestions(
+          targetRole: event.targetRole ?? 'Software Engineer',
+          interviewType: event.interviewType,
+          category: event.questionCategory ?? QuestionCategory.behavioral,
+          resume: _resume,
+          count: event.interviewType.questionCount,
+        );
+      }
+
+      developer.log('InterviewBloc: Generated ${questionTexts.length} questions', name: 'InterviewBloc');
 
       // Create interview questions with categories
       _questions = questionTexts.asMap().entries.map((entry) {
@@ -81,6 +157,7 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
       );
 
       if (_questions.isNotEmpty) {
+        developer.log('InterviewBloc: Interview started successfully', name: 'InterviewBloc');
         emit(InterviewInProgress(
           session: _currentSession!,
           currentQuestion: _questions[0],
@@ -88,9 +165,16 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
           totalQuestions: _questions.length,
         ));
       } else {
-        emit(const InterviewError('Failed to generate questions'));
+        developer.log('InterviewBloc: No questions generated', name: 'InterviewBloc');
+        emit(const InterviewError('Failed to generate questions. The AI returned no questions.'));
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      developer.log(
+        'InterviewBloc: Error starting interview',
+        name: 'InterviewBloc',
+        error: e,
+        stackTrace: stackTrace,
+      );
       emit(InterviewError('Failed to start interview: ${e.toString()}'));
     }
   }
@@ -137,13 +221,25 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
           currentTranscript: mockTranscript,
         ));
 
-        // Evaluate the answer
-        final evaluation = await groqApiService.evaluateAnswer(
-          question: currentState.currentQuestion.question,
-          answer: mockTranscript,
-          category: currentState.currentQuestion.category,
-          targetRole: _currentSession?.targetRole ?? 'Software Engineer',
-        );
+        // Evaluate the answer using selected provider
+        developer.log('InterviewBloc: Evaluating answer with ${_currentProvider.displayName}', name: 'InterviewBloc');
+
+        late final dynamic evaluation;
+        if (_currentProvider == AIProvider.gemini) {
+          evaluation = await geminiApiService.evaluateAnswer(
+            question: currentState.currentQuestion.question,
+            answer: mockTranscript,
+            category: currentState.currentQuestion.category,
+            targetRole: _currentSession?.targetRole ?? 'Software Engineer',
+          );
+        } else {
+          evaluation = await groqApiService.evaluateAnswer(
+            question: currentState.currentQuestion.question,
+            answer: mockTranscript,
+            category: currentState.currentQuestion.category,
+            targetRole: _currentSession?.targetRole ?? 'Software Engineer',
+          );
+        }
 
         // Create feedback map from EvaluationResult
         final feedbackMap = {
@@ -189,13 +285,26 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
       emit(currentState.copyWith(isProcessing: true));
 
       try {
-        // Evaluate the answer
-        final evaluation = await groqApiService.evaluateAnswer(
-          question: event.question,
-          answer: event.transcript,
-          category: event.category,
-          targetRole: _currentSession!.targetRole,
-        );
+        // Evaluate the answer using selected provider
+        developer.log('InterviewBloc: Evaluating answer with ${_currentProvider.displayName}', name: 'InterviewBloc');
+
+        late final dynamic evaluation;
+        if (_currentProvider == AIProvider.gemini) {
+          final geminiEval = await geminiApiService.evaluateAnswer(
+            question: event.question,
+            answer: event.transcript,
+            category: event.category,
+            targetRole: _currentSession!.targetRole,
+          );
+          evaluation = geminiEval;
+        } else {
+          evaluation = await groqApiService.evaluateAnswer(
+            question: event.question,
+            answer: event.transcript,
+            category: event.category,
+            targetRole: _currentSession!.targetRole,
+          );
+        }
 
         // Create response record
         final response = QuestionResponse(
@@ -320,11 +429,26 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
     Emitter<InterviewState> emit,
   ) async {
     try {
+      // TTS requires Groq API (PlayAI model)
+      final groqKeyResult = await settingsRepository.getApiKey();
+      String? groqKey;
+      groqKeyResult.fold(
+        (_) => groqKey = null,
+        (key) => groqKey = key,
+      );
+
+      if (groqKey == null || groqKey!.isEmpty) {
+        developer.log('InterviewBloc: TTS skipped - Groq API key not configured', name: 'InterviewBloc');
+        return;
+      }
+
+      groqApiService.setApiKey(groqKey!);
       await groqApiService.textToSpeech(
         text: event.text,
         voice: event.voice,
       );
     } catch (e) {
+      developer.log('InterviewBloc: TTS error: $e', name: 'InterviewBloc');
       // TTS errors are non-critical
     }
   }
@@ -338,6 +462,21 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
       emit(currentState.copyWith(isProcessing: true));
 
       try {
+        // Transcription requires Groq API (Whisper model)
+        final groqKeyResult = await settingsRepository.getApiKey();
+        String? groqKey;
+        groqKeyResult.fold(
+          (_) => groqKey = null,
+          (key) => groqKey = key,
+        );
+
+        if (groqKey == null || groqKey!.isEmpty) {
+          emit(currentState.copyWith(isProcessing: false));
+          emit(const InterviewError('Transcription requires Groq API key. Please configure it in Settings.'));
+          return;
+        }
+
+        groqApiService.setApiKey(groqKey!);
         final transcript = await groqApiService.transcribeAudio(event.audioFile);
         emit(currentState.copyWith(
           isProcessing: false,

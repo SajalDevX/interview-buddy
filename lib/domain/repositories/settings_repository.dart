@@ -16,11 +16,17 @@ abstract class SettingsRepository {
   /// Update settings
   Future<Either<Failure, void>> updateSettings(UserSettings settings);
 
-  /// Get API key
+  /// Get Groq API key
   Future<Either<Failure, String?>> getApiKey();
 
-  /// Save API key
+  /// Save Groq API key
   Future<Either<Failure, void>> saveApiKey(String apiKey);
+
+  /// Get Gemini API key
+  Future<Either<Failure, String?>> getGeminiApiKey();
+
+  /// Save Gemini API key
+  Future<Either<Failure, void>> saveGeminiApiKey(String apiKey);
 
   /// Get selected TTS voice
   Future<Either<Failure, TTSVoice>> getSelectedVoice();

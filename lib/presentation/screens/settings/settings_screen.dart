@@ -73,6 +73,12 @@ class SettingsView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // AI Provider Selection
+          _buildSectionHeader(context, 'AI Provider', Icons.smart_toy),
+          const SizedBox(height: 8),
+          _buildAIProviderCard(context, state),
+          const SizedBox(height: 24),
+
           // API Configuration
           _buildSectionHeader(context, 'API Configuration', Icons.key),
           const SizedBox(height: 8),
@@ -129,9 +135,8 @@ class SettingsView extends StatelessWidget {
     );
   }
 
-  Widget _buildApiKeyCard(BuildContext context, SettingsLoaded state) {
+  Widget _buildAIProviderCard(BuildContext context, SettingsLoaded state) {
     final theme = Theme.of(context);
-    final hasApiKey = state.apiKey != null && state.apiKey!.isNotEmpty;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -140,58 +145,151 @@ class SettingsView extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Groq API Key',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: hasApiKey
-                        ? AppColors.success.withOpacity(0.1)
-                        : AppColors.error.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    hasApiKey ? 'Configured' : 'Not Set',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: hasApiKey ? AppColors.success : AppColors.error,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
             Text(
-              'Required for AI-powered features like question generation, answer evaluation, and speech services.',
+              'Select AI Model',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Choose which AI provider to use for interviews',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.6),
               ),
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _showApiKeyDialog(context, state.apiKey),
-                icon: Icon(hasApiKey ? Icons.edit : Icons.add),
-                label: Text(hasApiKey ? 'Update API Key' : 'Add API Key'),
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            ...AIProvider.values.map((provider) => RadioListTile<AIProvider>(
+              title: Text(provider.displayName),
+              subtitle: Text(provider.description),
+              value: provider,
+              groupValue: state.settings.aiProvider,
+              onChanged: (value) {
+                if (value != null) {
+                  context.read<SettingsBloc>().add(UpdateAIProviderEvent(value));
+                }
+              },
+              activeColor: AppColors.primary,
+              contentPadding: EdgeInsets.zero,
+            )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildApiKeyCard(BuildContext context, SettingsLoaded state) {
+    final hasGroqKey = state.apiKey != null && state.apiKey!.isNotEmpty;
+    final hasGeminiKey = state.geminiApiKey != null && state.geminiApiKey!.isNotEmpty;
+    final selectedProvider = state.settings.aiProvider;
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Gemini API Key
+            _buildApiKeyRow(
+              context,
+              title: 'Gemini API Key',
+              isConfigured: hasGeminiKey,
+              isActive: selectedProvider == AIProvider.gemini,
+              onTap: () => _showGeminiApiKeyDialog(context, state.geminiApiKey),
+            ),
+            const Divider(height: 24),
+            // Groq API Key
+            _buildApiKeyRow(
+              context,
+              title: 'Groq API Key',
+              isConfigured: hasGroqKey,
+              isActive: selectedProvider == AIProvider.groq,
+              onTap: () => _showApiKeyDialog(context, state.apiKey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildApiKeyRow(
+    BuildContext context, {
+    required String title,
+    required bool isConfigured,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
+                ),
+                if (isActive) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      'Active',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: isConfigured
+                    ? AppColors.success.withOpacity(0.1)
+                    : AppColors.error.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                isConfigured ? 'Configured' : 'Not Set',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isConfigured ? AppColors.success : AppColors.error,
                 ),
               ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onTap,
+            icon: Icon(isConfigured ? Icons.edit : Icons.add),
+            label: Text(isConfigured ? 'Update' : 'Add API Key'),
+            style: OutlinedButton.styleFrom(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -376,6 +474,52 @@ class SettingsView extends StatelessWidget {
             onPressed: () {
               context.read<SettingsBloc>().add(
                 UpdateApiKeyEvent(controller.text),
+              );
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showGeminiApiKeyDialog(BuildContext context, String? currentKey) {
+    final controller = TextEditingController(text: currentKey);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Gemini API Key'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your Gemini API key. You can get one from aistudio.google.com',
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              decoration: InputDecoration(
+                hintText: 'AIza...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              context.read<SettingsBloc>().add(
+                UpdateGeminiApiKeyEvent(controller.text),
               );
               Navigator.pop(dialogContext);
             },

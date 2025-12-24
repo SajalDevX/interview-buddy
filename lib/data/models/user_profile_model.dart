@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import '../../domain/entities/user_profile.dart';
+import '../../domain/entities/enums.dart';
 
 part 'user_profile_model.g.dart';
 
@@ -78,12 +79,16 @@ class UserSettingsModel extends HiveObject {
   @HiveField(4)
   final double playbackSpeed;
 
+  @HiveField(5)
+  final String aiProvider;
+
   UserSettingsModel({
     required this.isDarkMode,
     required this.selectedVoice,
     required this.enableNotifications,
     required this.autoPlayAudio,
     required this.playbackSpeed,
+    this.aiProvider = 'gemini',
   });
 
   factory UserSettingsModel.fromEntity(UserSettings entity) {
@@ -93,6 +98,7 @@ class UserSettingsModel extends HiveObject {
       enableNotifications: entity.enableNotifications,
       autoPlayAudio: entity.autoPlayAudio,
       playbackSpeed: entity.playbackSpeed,
+      aiProvider: entity.aiProvider.name,
     );
   }
 
@@ -103,6 +109,10 @@ class UserSettingsModel extends HiveObject {
       enableNotifications: enableNotifications,
       autoPlayAudio: autoPlayAudio,
       playbackSpeed: playbackSpeed,
+      aiProvider: AIProvider.values.firstWhere(
+        (e) => e.name == aiProvider,
+        orElse: () => AIProvider.gemini,
+      ),
     );
   }
 }

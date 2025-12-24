@@ -45,6 +45,24 @@ class UpdateApiKeyEvent extends SettingsEvent {
   List<Object?> get props => [apiKey];
 }
 
+class UpdateGeminiApiKeyEvent extends SettingsEvent {
+  final String apiKey;
+
+  const UpdateGeminiApiKeyEvent(this.apiKey);
+
+  @override
+  List<Object?> get props => [apiKey];
+}
+
+class UpdateAIProviderEvent extends SettingsEvent {
+  final AIProvider provider;
+
+  const UpdateAIProviderEvent(this.provider);
+
+  @override
+  List<Object?> get props => [provider];
+}
+
 class ClearCacheEvent extends SettingsEvent {}
 
 class ResetSettingsEvent extends SettingsEvent {}

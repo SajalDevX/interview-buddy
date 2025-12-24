@@ -159,6 +159,14 @@ class HiveService {
     await _settingsBox.put('groq_api_key', apiKey);
   }
 
+  String? getGeminiApiKey() {
+    return _settingsBox.get('gemini_api_key') as String?;
+  }
+
+  Future<void> saveGeminiApiKey(String apiKey) async {
+    await _settingsBox.put('gemini_api_key', apiKey);
+  }
+
   // Cleanup
   Future<void> clearAllData() async {
     await _userBox.clear();

@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
 import '../constants/app_constants.dart';
 import '../errors/exceptions.dart';
@@ -21,13 +21,17 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          developer.log('ApiClient: Request to ${options.path}', name: 'ApiClient');
+          developer.log('ApiClient: Headers: ${options.headers}', name: 'ApiClient');
           if (_apiKey != null) {
             options.headers['Authorization'] = 'Bearer $_apiKey';
           }
           return handler.next(options);
         },
         onError: (error, handler) {
-          return handler.next(_handleError(error));
+          developer.log('ApiClient: Interceptor caught error: ${error.type}', name: 'ApiClient');
+          developer.log('ApiClient: Error response: ${error.response?.data}', name: 'ApiClient');
+          return handler.next(error);
         },
       ),
     );
@@ -59,14 +63,22 @@ class ApiClient {
     Map<String, dynamic>? queryParameters,
     Options? options,
   }) async {
+    developer.log('ApiClient: POST $path', name: 'ApiClient');
+    developer.log('ApiClient: API Key set: ${_apiKey != null}', name: 'ApiClient');
     try {
-      return await _dio.post<T>(
+      final response = await _dio.post<T>(
         path,
         data: data,
         queryParameters: queryParameters,
         options: options,
       );
+      developer.log('ApiClient: Response status: ${response.statusCode}', name: 'ApiClient');
+      return response;
     } on DioException catch (e) {
+      developer.log('ApiClient: DioException type: ${e.type}', name: 'ApiClient');
+      developer.log('ApiClient: DioException message: ${e.message}', name: 'ApiClient');
+      developer.log('ApiClient: Response status: ${e.response?.statusCode}', name: 'ApiClient');
+      developer.log('ApiClient: Response data: ${e.response?.data}', name: 'ApiClient');
       throw _handleError(e);
     }
   }

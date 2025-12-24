@@ -17,6 +17,10 @@ class AppConstants {
   static const String whisperModel = 'whisper-large-v3-turbo';
   static const String ttsModel = 'playai-tts';
 
+  // Gemini API
+  static const String geminiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';
+  static const String geminiModel = 'gemini-2.5-flash';
+
   // Audio Settings
   static const int sampleRate = 16000;
   static const int bitRate = 128000;

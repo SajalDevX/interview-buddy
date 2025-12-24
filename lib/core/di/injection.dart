@@ -7,6 +7,7 @@ import '../network/api_client.dart';
 import '../utils/permission_handler.dart';
 import '../../data/datasources/local/hive_service.dart';
 import '../../data/datasources/remote/groq_api_service.dart';
+import '../../data/datasources/remote/gemini_api_service.dart';
 import '../../data/repositories/interview_repository_impl.dart';
 import '../../data/repositories/resume_repository_impl.dart';
 import '../../data/repositories/progress_repository_impl.dart';
@@ -44,16 +45,27 @@ Future<void> initializeDependencies() async {
   getIt.registerLazySingleton<GroqApiService>(
     () => GroqApiService(apiClient: getIt<ApiClient>()),
   );
+  getIt.registerLazySingleton<GeminiApiService>(
+    () => GeminiApiService(),
+  );
 
   // Initialize Hive Service
   await getIt<HiveService>().init();
 
   // Repositories
+  getIt.registerLazySingleton<SettingsRepository>(
+    () => SettingsRepositoryImpl(
+      hiveService: getIt<HiveService>(),
+    ),
+  );
+
   getIt.registerLazySingleton<InterviewRepository>(
     () => InterviewRepositoryImpl(
       groqApiService: getIt<GroqApiService>(),
+      geminiApiService: getIt<GeminiApiService>(),
       hiveService: getIt<HiveService>(),
       connectivity: getIt<Connectivity>(),
+      settingsRepository: getIt<SettingsRepository>(),
     ),
   );
 
@@ -65,12 +77,6 @@ Future<void> initializeDependencies() async {
 
   getIt.registerLazySingleton<ProgressRepository>(
     () => ProgressRepositoryImpl(
-      hiveService: getIt<HiveService>(),
-    ),
-  );
-
-  getIt.registerLazySingleton<SettingsRepository>(
-    () => SettingsRepositoryImpl(
       hiveService: getIt<HiveService>(),
     ),
   );
@@ -117,6 +123,8 @@ Future<void> initializeDependencies() async {
       getFeedbackUseCase: getIt<GetFeedbackUseCase>(),
       updateProgressUseCase: getIt<UpdateProgressUseCase>(),
       groqApiService: getIt<GroqApiService>(),
+      geminiApiService: getIt<GeminiApiService>(),
+      settingsRepository: getIt<SettingsRepository>(),
     ),
   );
 

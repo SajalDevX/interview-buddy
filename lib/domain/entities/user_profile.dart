@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'enums.dart';
 
 class UserProfile extends Equatable {
   final String id;
@@ -47,6 +48,7 @@ class UserSettings extends Equatable {
   final bool enableNotifications;
   final bool autoPlayAudio;
   final double playbackSpeed;
+  final AIProvider aiProvider;
 
   const UserSettings({
     this.isDarkMode = false,
@@ -54,6 +56,7 @@ class UserSettings extends Equatable {
     this.enableNotifications = true,
     this.autoPlayAudio = true,
     this.playbackSpeed = 1.0,
+    this.aiProvider = AIProvider.gemini,
   });
 
   UserSettings copyWith({
@@ -62,6 +65,7 @@ class UserSettings extends Equatable {
     bool? enableNotifications,
     bool? autoPlayAudio,
     double? playbackSpeed,
+    AIProvider? aiProvider,
   }) {
     return UserSettings(
       isDarkMode: isDarkMode ?? this.isDarkMode,
@@ -69,9 +73,10 @@ class UserSettings extends Equatable {
       enableNotifications: enableNotifications ?? this.enableNotifications,
       autoPlayAudio: autoPlayAudio ?? this.autoPlayAudio,
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
+      aiProvider: aiProvider ?? this.aiProvider,
     );
   }
 
   @override
-  List<Object?> get props => [isDarkMode, selectedVoice, enableNotifications, autoPlayAudio, playbackSpeed];
+  List<Object?> get props => [isDarkMode, selectedVoice, enableNotifications, autoPlayAudio, playbackSpeed, aiProvider];
 }

@@ -10,21 +10,59 @@ import '../../domain/entities/enums.dart';
 import '../../domain/entities/interview_session.dart';
 import '../../domain/entities/parsed_resume.dart';
 import '../../domain/repositories/interview_repository.dart';
+import '../../domain/repositories/settings_repository.dart';
 import '../datasources/local/hive_service.dart';
 import '../datasources/remote/groq_api_service.dart';
+import '../datasources/remote/gemini_api_service.dart';
 import '../models/interview_session_model.dart';
 
 class InterviewRepositoryImpl implements InterviewRepository {
   final GroqApiService groqApiService;
+  final GeminiApiService geminiApiService;
   final HiveService hiveService;
   final Connectivity connectivity;
+  final SettingsRepository settingsRepository;
   final _uuid = const Uuid();
 
   InterviewRepositoryImpl({
     required this.groqApiService,
+    required this.geminiApiService,
     required this.hiveService,
     required this.connectivity,
+    required this.settingsRepository,
   });
+
+  Future<AIProvider> _getSelectedProvider() async {
+    final result = await settingsRepository.getSettings();
+    return result.fold(
+      (_) => AIProvider.gemini,
+      (settings) => settings.aiProvider,
+    );
+  }
+
+  Future<void> _ensureApiKeySet(AIProvider provider) async {
+    if (provider == AIProvider.gemini) {
+      final result = await settingsRepository.getGeminiApiKey();
+      result.fold(
+        (_) => null,
+        (key) {
+          if (key != null && key.isNotEmpty) {
+            geminiApiService.setApiKey(key);
+          }
+        },
+      );
+    } else {
+      final result = await settingsRepository.getApiKey();
+      result.fold(
+        (_) => null,
+        (key) {
+          if (key != null && key.isNotEmpty) {
+            groqApiService.setApiKey(key);
+          }
+        },
+      );
+    }
+  }
 
   Future<bool> _isConnected() async {
     final result = await connectivity.checkConnectivity();
@@ -69,13 +107,27 @@ class InterviewRepositoryImpl implements InterviewRepository {
         return const Left(NetworkFailure());
       }
 
-      final questions = await groqApiService.generateInterviewQuestions(
-        targetRole: targetRole,
-        interviewType: type,
-        category: category,
-        resume: resume,
-        count: count,
-      );
+      final provider = await _getSelectedProvider();
+      await _ensureApiKeySet(provider);
+
+      List<String> questions;
+      if (provider == AIProvider.gemini) {
+        questions = await geminiApiService.generateInterviewQuestions(
+          targetRole: targetRole,
+          interviewType: type,
+          category: category,
+          resume: resume,
+          count: count,
+        );
+      } else {
+        questions = await groqApiService.generateInterviewQuestions(
+          targetRole: targetRole,
+          interviewType: type,
+          category: category,
+          resume: resume,
+          count: count,
+        );
+      }
 
       return Right(questions);
     } on ServerException catch (e) {
@@ -170,14 +222,29 @@ class InterviewRepositoryImpl implements InterviewRepository {
         return const Left(NetworkFailure());
       }
 
-      final result = await groqApiService.evaluateAnswer(
-        question: question,
-        answer: answer,
-        category: category,
-        targetRole: targetRole,
-      );
+      final provider = await _getSelectedProvider();
+      await _ensureApiKeySet(provider);
 
-      return Right(result.toResponseScore());
+      ResponseScore score;
+      if (provider == AIProvider.gemini) {
+        final result = await geminiApiService.evaluateAnswer(
+          question: question,
+          answer: answer,
+          category: category,
+          targetRole: targetRole,
+        );
+        score = result.toResponseScore();
+      } else {
+        final result = await groqApiService.evaluateAnswer(
+          question: question,
+          answer: answer,
+          category: category,
+          targetRole: targetRole,
+        );
+        score = result.toResponseScore();
+      }
+
+      return Right(score);
     } on ServerException catch (e) {
       return Left(ServerFailure(message: e.message, code: e.statusCode));
     } on NetworkException catch (e) {
@@ -199,12 +266,25 @@ class InterviewRepositoryImpl implements InterviewRepository {
         return const Left(NetworkFailure());
       }
 
-      final followUp = await groqApiService.generateFollowUpQuestion(
-        previousQuestion: previousQuestion,
-        previousAnswer: previousAnswer,
-        category: category,
-        targetRole: targetRole,
-      );
+      final provider = await _getSelectedProvider();
+      await _ensureApiKeySet(provider);
+
+      String followUp;
+      if (provider == AIProvider.gemini) {
+        followUp = await geminiApiService.generateFollowUpQuestion(
+          previousQuestion: previousQuestion,
+          previousAnswer: previousAnswer,
+          category: category,
+          targetRole: targetRole,
+        );
+      } else {
+        followUp = await groqApiService.generateFollowUpQuestion(
+          previousQuestion: previousQuestion,
+          previousAnswer: previousAnswer,
+          category: category,
+          targetRole: targetRole,
+        );
+      }
 
       return Right(followUp);
     } on ServerException catch (e) {
@@ -226,12 +306,25 @@ class InterviewRepositoryImpl implements InterviewRepository {
         return const Left(NetworkFailure());
       }
 
-      final modelAnswer = await groqApiService.generateModelAnswer(
-        question: question,
-        category: category,
-        targetRole: targetRole,
-        resume: resume,
-      );
+      final provider = await _getSelectedProvider();
+      await _ensureApiKeySet(provider);
+
+      String modelAnswer;
+      if (provider == AIProvider.gemini) {
+        modelAnswer = await geminiApiService.generateModelAnswer(
+          question: question,
+          category: category,
+          targetRole: targetRole,
+          resume: resume,
+        );
+      } else {
+        modelAnswer = await groqApiService.generateModelAnswer(
+          question: question,
+          category: category,
+          targetRole: targetRole,
+          resume: resume,
+        );
+      }
 
       return Right(modelAnswer);
     } on ServerException catch (e) {

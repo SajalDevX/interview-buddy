@@ -203,6 +203,29 @@ enum TTSVoice {
   }
 }
 
+enum AIProvider {
+  groq,
+  gemini;
+
+  String get displayName {
+    switch (this) {
+      case AIProvider.groq:
+        return 'Groq (Llama)';
+      case AIProvider.gemini:
+        return 'Google Gemini';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case AIProvider.groq:
+        return 'Fast inference with Llama 3.1';
+      case AIProvider.gemini:
+        return 'Google\'s Gemini 1.5 Flash';
+    }
+  }
+}
+
 enum AchievementType {
   firstSteps,
   streakMaster,

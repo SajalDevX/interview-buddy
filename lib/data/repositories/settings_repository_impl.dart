@@ -91,6 +91,26 @@ class SettingsRepositoryImpl implements SettingsRepository {
   }
 
   @override
+  Future<Either<Failure, String?>> getGeminiApiKey() async {
+    try {
+      final apiKey = hiveService.getGeminiApiKey();
+      return Right(apiKey);
+    } catch (e) {
+      return Left(CacheFailure(message: e.toString()));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> saveGeminiApiKey(String apiKey) async {
+    try {
+      await hiveService.saveGeminiApiKey(apiKey);
+      return const Right(null);
+    } catch (e) {
+      return Left(CacheFailure(message: e.toString()));
+    }
+  }
+
+  @override
   Future<Either<Failure, TTSVoice>> getSelectedVoice() async {
     try {
       final settingsResult = await getSettings();

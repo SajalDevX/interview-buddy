@@ -74,13 +74,14 @@ class UserSettingsModelAdapter extends TypeAdapter<UserSettingsModel> {
       enableNotifications: fields[2] as bool,
       autoPlayAudio: fields[3] as bool,
       playbackSpeed: fields[4] as double,
+      aiProvider: (fields[5] as String?) ?? 'gemini',
     );
   }
 
   @override
   void write(BinaryWriter writer, UserSettingsModel obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.isDarkMode)
       ..writeByte(1)
@@ -90,7 +91,9 @@ class UserSettingsModelAdapter extends TypeAdapter<UserSettingsModel> {
       ..writeByte(3)
       ..write(obj.autoPlayAudio)
       ..writeByte(4)
-      ..write(obj.playbackSpeed);
+      ..write(obj.playbackSpeed)
+      ..writeByte(5)
+      ..write(obj.aiProvider);
   }
 
   @override
