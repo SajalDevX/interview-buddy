@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "872481007760",
+    "project_id": "interview-buddy-128dc",
+    "storage_bucket": "interview-buddy-128dc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:872481007760:android:702f33283a06b25cb41015",
+        "android_client_info": {
+          "package_name": "com.interviewbuddy.interview_buddy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqvauuEv7tSfgTVxS-MDpY9LDoV1lTuvk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

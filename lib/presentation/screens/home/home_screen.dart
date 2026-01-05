@@ -8,7 +8,6 @@ import '../../../domain/entities/enums.dart';
 import '../../blocs/home/home_bloc.dart';
 import '../../router/app_router.dart';
 import '../../widgets/common/stat_card.dart';
-import '../../widgets/common/gradient_button.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});

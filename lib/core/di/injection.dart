@@ -8,14 +8,18 @@ import '../utils/permission_handler.dart';
 import '../../data/datasources/local/hive_service.dart';
 import '../../data/datasources/remote/groq_api_service.dart';
 import '../../data/datasources/remote/gemini_api_service.dart';
+import '../../data/datasources/remote/firebase_auth_service.dart';
+import '../../data/datasources/remote/firestore_service.dart';
 import '../../data/repositories/interview_repository_impl.dart';
 import '../../data/repositories/resume_repository_impl.dart';
 import '../../data/repositories/progress_repository_impl.dart';
 import '../../data/repositories/settings_repository_impl.dart';
+import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/repositories/interview_repository.dart';
 import '../../domain/repositories/resume_repository.dart';
 import '../../domain/repositories/progress_repository.dart';
 import '../../domain/repositories/settings_repository.dart';
+import '../../domain/repositories/auth_repository.dart';
 import '../../domain/usecases/interview/start_interview_usecase.dart';
 import '../../domain/usecases/interview/submit_answer_usecase.dart';
 import '../../domain/usecases/interview/get_feedback_usecase.dart';
@@ -23,11 +27,18 @@ import '../../domain/usecases/resume/parse_resume_usecase.dart';
 import '../../domain/usecases/resume/save_resume_usecase.dart';
 import '../../domain/usecases/progress/get_progress_usecase.dart';
 import '../../domain/usecases/progress/update_progress_usecase.dart';
+import '../../domain/usecases/auth/sign_in_with_email_usecase.dart';
+import '../../domain/usecases/auth/sign_up_with_email_usecase.dart';
+import '../../domain/usecases/auth/sign_in_with_google_usecase.dart';
+import '../../domain/usecases/auth/sign_out_usecase.dart';
+import '../../domain/usecases/auth/get_current_user_usecase.dart';
+import '../../domain/usecases/auth/send_password_reset_usecase.dart';
 import '../../presentation/blocs/interview/interview_bloc.dart';
 import '../../presentation/blocs/resume/resume_bloc.dart';
 import '../../presentation/blocs/progress/progress_bloc.dart';
 import '../../presentation/blocs/settings/settings_bloc.dart';
 import '../../presentation/blocs/home/home_bloc.dart';
+import '../../presentation/blocs/auth/auth_bloc.dart';
 
 final getIt = GetIt.instance;
 
@@ -49,10 +60,21 @@ Future<void> initializeDependencies() async {
     () => GeminiApiService(),
   );
 
+  // Firebase Services
+  getIt.registerLazySingleton<FirebaseAuthService>(() => FirebaseAuthService());
+  getIt.registerLazySingleton<FirestoreService>(() => FirestoreService());
+
   // Initialize Hive Service
   await getIt<HiveService>().init();
 
   // Repositories
+  getIt.registerLazySingleton<AuthRepository>(
+    () => AuthRepositoryImpl(
+      authService: getIt<FirebaseAuthService>(),
+      firestoreService: getIt<FirestoreService>(),
+    ),
+  );
+
   getIt.registerLazySingleton<SettingsRepository>(
     () => SettingsRepositoryImpl(
       hiveService: getIt<HiveService>(),
@@ -108,6 +130,26 @@ Future<void> initializeDependencies() async {
     () => UpdateProgressUseCase(repository: getIt<ProgressRepository>()),
   );
 
+  // Use Cases - Auth
+  getIt.registerLazySingleton<SignInWithEmailUseCase>(
+    () => SignInWithEmailUseCase(repository: getIt<AuthRepository>()),
+  );
+  getIt.registerLazySingleton<SignUpWithEmailUseCase>(
+    () => SignUpWithEmailUseCase(repository: getIt<AuthRepository>()),
+  );
+  getIt.registerLazySingleton<SignInWithGoogleUseCase>(
+    () => SignInWithGoogleUseCase(repository: getIt<AuthRepository>()),
+  );
+  getIt.registerLazySingleton<SignOutUseCase>(
+    () => SignOutUseCase(repository: getIt<AuthRepository>()),
+  );
+  getIt.registerLazySingleton<GetCurrentUserUseCase>(
+    () => GetCurrentUserUseCase(repository: getIt<AuthRepository>()),
+  );
+  getIt.registerLazySingleton<SendPasswordResetUseCase>(
+    () => SendPasswordResetUseCase(repository: getIt<AuthRepository>()),
+  );
+
   // BLoCs
   getIt.registerFactory<HomeBloc>(
     () => HomeBloc(
@@ -144,6 +186,12 @@ Future<void> initializeDependencies() async {
   getIt.registerFactory<SettingsBloc>(
     () => SettingsBloc(
       settingsRepository: getIt<SettingsRepository>(),
+    ),
+  );
+
+  getIt.registerFactory<AuthBloc>(
+    () => AuthBloc(
+      authRepository: getIt<AuthRepository>(),
     ),
   );
 }

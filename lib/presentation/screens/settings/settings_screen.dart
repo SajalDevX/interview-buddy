@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/di/injection.dart';
 import '../../../domain/entities/enums.dart';
 import '../../blocs/settings/settings_bloc.dart';
+import '../../blocs/auth/auth_bloc.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -107,6 +108,12 @@ class SettingsView extends StatelessWidget {
           _buildSectionHeader(context, 'Storage', Icons.storage),
           const SizedBox(height: 8),
           _buildStorageSettings(context),
+          const SizedBox(height: 24),
+
+          // Account
+          _buildSectionHeader(context, 'Account', Icons.account_circle),
+          const SizedBox(height: 8),
+          _buildAccountSection(context),
           const SizedBox(height: 24),
 
           // About
@@ -392,6 +399,70 @@ class SettingsView extends StatelessWidget {
             title: const Text('Reset Settings'),
             subtitle: const Text('Restore default settings'),
             onTap: () => _showResetSettingsDialog(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final authState = context.watch<AuthBloc>().state;
+    final user = authState is Authenticated ? authState.user : null;
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        children: [
+          if (user != null) ...[
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: AppColors.primary.withOpacity(0.1),
+                backgroundImage: user.photoUrl != null
+                    ? NetworkImage(user.photoUrl!)
+                    : null,
+                child: user.photoUrl == null
+                    ? Icon(Icons.person, color: AppColors.primary)
+                    : null,
+              ),
+              title: Text(user.displayName ?? 'User'),
+              subtitle: Text(user.email),
+            ),
+            const Divider(height: 1),
+          ],
+          ListTile(
+            leading: const Icon(Icons.logout, color: AppColors.error),
+            title: const Text('Sign Out'),
+            subtitle: const Text('Sign out of your account'),
+            onTap: () => _showSignOutDialog(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSignOutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sign Out'),
+        content: const Text(
+          'Are you sure you want to sign out?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<AuthBloc>().add(const SignOutRequested());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ),
+            child: const Text('Sign Out'),
           ),
         ],
       ),
