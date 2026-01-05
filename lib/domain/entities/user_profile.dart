@@ -56,7 +56,7 @@ class UserSettings extends Equatable {
     this.enableNotifications = true,
     this.autoPlayAudio = true,
     this.playbackSpeed = 1.0,
-    this.aiProvider = AIProvider.gemini,
+    this.aiProvider = AIProvider.groq,
   });
 
   UserSettings copyWith({

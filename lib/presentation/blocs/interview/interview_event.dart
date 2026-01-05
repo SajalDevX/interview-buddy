@@ -29,7 +29,12 @@ class StartRecordingEvent extends InterviewEvent {
 }
 
 class StopRecordingEvent extends InterviewEvent {
-  const StopRecordingEvent();
+  final String? audioPath;
+
+  const StopRecordingEvent({this.audioPath});
+
+  @override
+  List<Object?> get props => [audioPath];
 }
 
 class SubmitAnswerEvent extends InterviewEvent {

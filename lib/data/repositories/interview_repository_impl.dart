@@ -35,7 +35,7 @@ class InterviewRepositoryImpl implements InterviewRepository {
   Future<AIProvider> _getSelectedProvider() async {
     final result = await settingsRepository.getSettings();
     return result.fold(
-      (_) => AIProvider.gemini,
+      (_) => AIProvider.groq,
       (settings) => settings.aiProvider,
     );
   }

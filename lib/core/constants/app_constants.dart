@@ -15,7 +15,7 @@ class AppConstants {
   static const String primaryModel = 'llama-3.1-70b-versatile';
   static const String fastModel = 'llama-3.1-8b-instant';
   static const String whisperModel = 'whisper-large-v3-turbo';
-  static const String ttsModel = 'playai-tts';
+  static const String ttsModel = 'playai-tts-arabic';  // Groq TTS model (supports English & Arabic)
 
   // Gemini API
   static const String geminiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta';

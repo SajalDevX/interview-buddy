@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -13,6 +14,7 @@ import '../../../domain/usecases/progress/update_progress_usecase.dart';
 import '../../../domain/repositories/settings_repository.dart';
 import '../../../data/datasources/remote/groq_api_service.dart';
 import '../../../data/datasources/remote/gemini_api_service.dart';
+import '../../../data/datasources/local/native_tts_service.dart';
 
 part 'interview_event.dart';
 part 'interview_state.dart';
@@ -25,12 +27,13 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
   final GroqApiService groqApiService;
   final GeminiApiService geminiApiService;
   final SettingsRepository settingsRepository;
+  final NativeTtsService nativeTtsService;
 
   InterviewSession? _currentSession;
   List<InterviewQuestion> _questions = [];
   int _currentQuestionIndex = 0;
   ParsedResume? _resume;
-  AIProvider _currentProvider = AIProvider.gemini;
+  AIProvider _currentProvider = AIProvider.groq;
 
   InterviewBloc({
     required this.startInterviewUseCase,
@@ -40,6 +43,7 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
     required this.groqApiService,
     required this.geminiApiService,
     required this.settingsRepository,
+    required this.nativeTtsService,
   }) : super(InterviewInitial()) {
     on<StartInterviewEvent>(_onStartInterview);
     on<StartRecordingEvent>(_onStartRecording);
@@ -165,23 +169,14 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
           totalQuestions: _questions.length,
         ));
 
-        // Auto-read first question if enabled
-        final voiceResult = await settingsRepository.getSelectedVoice();
-        voiceResult.fold(
+        // Auto-read first question if enabled (uses native device TTS)
+        settingsResult.fold(
           (_) {},
-          (voice) {
-            settingsResult.fold(
-              (_) {},
-              (settings) {
-                if (settings.autoPlayAudio) {
-                  developer.log('InterviewBloc: Auto-reading first question with TTS', name: 'InterviewBloc');
-                  add(TextToSpeechEvent(
-                    text: _questions[0].question,
-                    voice: voice,
-                  ));
-                }
-              },
-            );
+          (settings) {
+            if (settings.autoPlayAudio) {
+              developer.log('InterviewBloc: Auto-reading first question with native TTS', name: 'InterviewBloc');
+              add(TextToSpeechEvent(text: _questions[0].question));
+            }
           },
         );
       } else {
@@ -231,14 +226,48 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
       ));
 
       try {
-        // For demo, simulate a transcript
-        await Future.delayed(const Duration(seconds: 1));
-        final mockTranscript = 'This is my answer to the question about ${currentState.currentQuestion.category.displayName}. I have experience in this area and can provide specific examples from my previous role...';
+        String transcript;
+
+        // Transcribe audio if path provided
+        if (event.audioPath != null && event.audioPath!.isNotEmpty) {
+          developer.log('InterviewBloc: Transcribing audio from ${event.audioPath}', name: 'InterviewBloc');
+
+          // Ensure Groq API key is set for transcription (Whisper)
+          final groqKeyResult = await settingsRepository.getApiKey();
+          String? groqKey;
+          groqKeyResult.fold(
+            (_) => groqKey = null,
+            (key) => groqKey = key,
+          );
+
+          if (groqKey == null || groqKey!.isEmpty) {
+            emit(currentState.copyWith(isRecording: false, isProcessing: false));
+            emit(const InterviewError('Groq API key is required for audio transcription. Please configure it in Settings.'));
+            return;
+          }
+
+          groqApiService.setApiKey(groqKey!);
+
+          final audioFile = File(event.audioPath!);
+          if (!await audioFile.exists()) {
+            emit(currentState.copyWith(isRecording: false, isProcessing: false));
+            emit(const InterviewError('Audio file not found. Please try recording again.'));
+            return;
+          }
+
+          transcript = await groqApiService.transcribeAudio(audioFile);
+          developer.log('InterviewBloc: Transcription result: ${transcript.substring(0, transcript.length > 100 ? 100 : transcript.length)}...', name: 'InterviewBloc');
+        } else {
+          developer.log('InterviewBloc: No audio path provided, cannot transcribe', name: 'InterviewBloc');
+          emit(currentState.copyWith(isRecording: false, isProcessing: false));
+          emit(const InterviewError('No audio recorded. Please try again.'));
+          return;
+        }
 
         emit(currentState.copyWith(
           isRecording: false,
           isProcessing: true,
-          currentTranscript: mockTranscript,
+          currentTranscript: transcript,
         ));
 
         // Evaluate the answer using selected provider
@@ -248,14 +277,14 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
         if (_currentProvider == AIProvider.gemini) {
           evaluation = await geminiApiService.evaluateAnswer(
             question: currentState.currentQuestion.question,
-            answer: mockTranscript,
+            answer: transcript,
             category: currentState.currentQuestion.category,
             targetRole: _currentSession?.targetRole ?? 'Software Engineer',
           );
         } else {
           evaluation = await groqApiService.evaluateAnswer(
             question: currentState.currentQuestion.question,
-            answer: mockTranscript,
+            answer: transcript,
             category: currentState.currentQuestion.category,
             targetRole: _currentSession?.targetRole ?? 'Software Engineer',
           );
@@ -277,11 +306,12 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
         emit(currentState.copyWith(
           isRecording: false,
           isProcessing: false,
-          currentTranscript: mockTranscript,
+          currentTranscript: transcript,
           aiResponse: evaluation.feedback,
           currentFeedback: feedbackMap,
         ));
       } catch (e) {
+        developer.log('InterviewBloc: Error processing answer: $e', name: 'InterviewBloc');
         emit(currentState.copyWith(
           isRecording: false,
           isProcessing: false,
@@ -381,24 +411,15 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
         totalQuestions: _questions.length,
       ));
 
-      // Auto-read next question if enabled
+      // Auto-read next question if enabled (uses native device TTS)
       final settingsResult = await settingsRepository.getSettings();
-      final voiceResult = await settingsRepository.getSelectedVoice();
-      voiceResult.fold(
+      settingsResult.fold(
         (_) {},
-        (voice) {
-          settingsResult.fold(
-            (_) {},
-            (settings) {
-              if (settings.autoPlayAudio) {
-                developer.log('InterviewBloc: Auto-reading next question with TTS', name: 'InterviewBloc');
-                add(TextToSpeechEvent(
-                  text: _questions[_currentQuestionIndex].question,
-                  voice: voice,
-                ));
-              }
-            },
-          );
+        (settings) {
+          if (settings.autoPlayAudio) {
+            developer.log('InterviewBloc: Auto-reading next question with native TTS', name: 'InterviewBloc');
+            add(TextToSpeechEvent(text: _questions[_currentQuestionIndex].question));
+          }
         },
       );
     } else {
@@ -470,24 +491,9 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
     Emitter<InterviewState> emit,
   ) async {
     try {
-      // TTS requires Groq API (PlayAI model)
-      final groqKeyResult = await settingsRepository.getApiKey();
-      String? groqKey;
-      groqKeyResult.fold(
-        (_) => groqKey = null,
-        (key) => groqKey = key,
-      );
-
-      if (groqKey == null || groqKey!.isEmpty) {
-        developer.log('InterviewBloc: TTS skipped - Groq API key not configured', name: 'InterviewBloc');
-        return;
-      }
-
-      groqApiService.setApiKey(groqKey!);
-      await groqApiService.textToSpeech(
-        text: event.text,
-        voice: event.voice,
-      );
+      // Use native device TTS (no API required)
+      developer.log('InterviewBloc: Speaking with native TTS', name: 'InterviewBloc');
+      await nativeTtsService.speak(event.text);
     } catch (e) {
       developer.log('InterviewBloc: TTS error: $e', name: 'InterviewBloc');
       // TTS errors are non-critical

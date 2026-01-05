@@ -1,9 +1,12 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/di/injection.dart';
+import '../../../data/datasources/local/audio_recorder_service.dart';
 import '../../../domain/entities/enums.dart';
 import '../../blocs/interview/interview_bloc.dart';
 import '../../widgets/common/animated_mic_button.dart';
@@ -46,6 +49,10 @@ class _InterviewViewState extends State<InterviewView>
     with TickerProviderStateMixin {
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
+  late AudioRecorderService _audioRecorder;
+  String? _currentRecordingPath;
+  DateTime? _recordingStartTime;
+  static const _minRecordingDuration = Duration(seconds: 2);
 
   @override
   void initState() {
@@ -59,12 +66,76 @@ class _InterviewViewState extends State<InterviewView>
       curve: Curves.easeInOut,
     );
     _fadeController.forward();
+    _audioRecorder = getIt<AudioRecorderService>();
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      developer.log('InterviewScreen: Starting recording', name: 'InterviewScreen');
+      _currentRecordingPath = await _audioRecorder.startRecording();
+      _recordingStartTime = DateTime.now();
+      if (mounted) {
+        context.read<InterviewBloc>().add(const StartRecordingEvent());
+      }
+    } catch (e) {
+      developer.log('InterviewScreen: Failed to start recording: $e', name: 'InterviewScreen');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to start recording: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    // Check minimum recording duration
+    if (_recordingStartTime != null) {
+      final elapsed = DateTime.now().difference(_recordingStartTime!);
+      if (elapsed < _minRecordingDuration) {
+        final remaining = _minRecordingDuration - elapsed;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Please record for at least ${_minRecordingDuration.inSeconds} seconds. Keep speaking!'),
+              backgroundColor: AppColors.accent,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return; // Don't stop recording yet
+      }
+    }
+
+    try {
+      developer.log('InterviewScreen: Stopping recording', name: 'InterviewScreen');
+      final audioPath = await _audioRecorder.stopRecording();
+      _recordingStartTime = null;
+      developer.log('InterviewScreen: Recording saved to: $audioPath', name: 'InterviewScreen');
+      if (mounted) {
+        context.read<InterviewBloc>().add(StopRecordingEvent(audioPath: audioPath));
+      }
+    } catch (e) {
+      developer.log('InterviewScreen: Failed to stop recording: $e', name: 'InterviewScreen');
+      _recordingStartTime = null;
+      if (mounted) {
+        context.read<InterviewBloc>().add(const StopRecordingEvent());
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to stop recording: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -279,34 +350,59 @@ class _InterviewViewState extends State<InterviewView>
   }
 
   Widget _buildRecordingIndicator() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.error.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.error.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: const BoxDecoration(
-              color: AppColors.error,
-              shape: BoxShape.circle,
-            ),
+    return StreamBuilder(
+      stream: Stream.periodic(const Duration(seconds: 1)),
+      builder: (context, snapshot) {
+        final elapsed = _recordingStartTime != null
+            ? DateTime.now().difference(_recordingStartTime!)
+            : Duration.zero;
+        final minutes = elapsed.inMinutes.toString().padLeft(2, '0');
+        final seconds = (elapsed.inSeconds % 60).toString().padLeft(2, '0');
+
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.error.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.error.withOpacity(0.3)),
           ),
-          const SizedBox(width: 12),
-          const Text(
-            'Recording your answer...',
-            style: TextStyle(
-              color: AppColors.error,
-              fontWeight: FontWeight.w600,
-            ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: const BoxDecoration(
+                      color: AppColors.error,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Recording... $minutes:$seconds',
+                    style: const TextStyle(
+                      color: AppColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              if (elapsed < _minRecordingDuration) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Speak for at least ${_minRecordingDuration.inSeconds} seconds',
+                  style: TextStyle(
+                    color: AppColors.error.withOpacity(0.7),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -669,9 +765,9 @@ class _InterviewViewState extends State<InterviewView>
               isProcessing: state.isProcessing,
               onPressed: () {
                 if (state.isRecording) {
-                  context.read<InterviewBloc>().add(StopRecordingEvent());
+                  _stopRecording();
                 } else {
-                  context.read<InterviewBloc>().add(StartRecordingEvent());
+                  _startRecording();
                 }
               },
             ),

@@ -88,7 +88,7 @@ class UserSettingsModel extends HiveObject {
     required this.enableNotifications,
     required this.autoPlayAudio,
     required this.playbackSpeed,
-    this.aiProvider = 'gemini',
+    this.aiProvider = 'groq',
   });
 
   factory UserSettingsModel.fromEntity(UserSettings entity) {
@@ -111,7 +111,7 @@ class UserSettingsModel extends HiveObject {
       playbackSpeed: playbackSpeed,
       aiProvider: AIProvider.values.firstWhere(
         (e) => e.name == aiProvider,
-        orElse: () => AIProvider.gemini,
+        orElse: () => AIProvider.groq,
       ),
     );
   }

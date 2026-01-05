@@ -6,6 +6,8 @@ import '../constants/app_constants.dart';
 import '../network/api_client.dart';
 import '../utils/permission_handler.dart';
 import '../../data/datasources/local/hive_service.dart';
+import '../../data/datasources/local/native_tts_service.dart';
+import '../../data/datasources/local/audio_recorder_service.dart';
 import '../../data/datasources/remote/groq_api_service.dart';
 import '../../data/datasources/remote/gemini_api_service.dart';
 import '../../data/datasources/remote/firebase_auth_service.dart';
@@ -53,6 +55,8 @@ Future<void> initializeDependencies() async {
 
   // Services
   getIt.registerLazySingleton<HiveService>(() => HiveService());
+  getIt.registerLazySingleton<NativeTtsService>(() => NativeTtsService());
+  getIt.registerLazySingleton<AudioRecorderService>(() => AudioRecorderService());
   getIt.registerLazySingleton<GroqApiService>(
     () => GroqApiService(apiClient: getIt<ApiClient>()),
   );
@@ -167,6 +171,7 @@ Future<void> initializeDependencies() async {
       groqApiService: getIt<GroqApiService>(),
       geminiApiService: getIt<GeminiApiService>(),
       settingsRepository: getIt<SettingsRepository>(),
+      nativeTtsService: getIt<NativeTtsService>(),
     ),
   );
 
