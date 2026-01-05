@@ -164,6 +164,26 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
           currentQuestionIndex: 0,
           totalQuestions: _questions.length,
         ));
+
+        // Auto-read first question if enabled
+        final voiceResult = await settingsRepository.getSelectedVoice();
+        voiceResult.fold(
+          (_) {},
+          (voice) {
+            settingsResult.fold(
+              (_) {},
+              (settings) {
+                if (settings.autoPlayAudio) {
+                  developer.log('InterviewBloc: Auto-reading first question with TTS', name: 'InterviewBloc');
+                  add(TextToSpeechEvent(
+                    text: _questions[0].question,
+                    voice: voice,
+                  ));
+                }
+              },
+            );
+          },
+        );
       } else {
         developer.log('InterviewBloc: No questions generated', name: 'InterviewBloc');
         emit(const InterviewError('Failed to generate questions. The AI returned no questions.'));
@@ -360,6 +380,27 @@ class InterviewBloc extends Bloc<InterviewEvent, InterviewState> {
         currentQuestionIndex: _currentQuestionIndex,
         totalQuestions: _questions.length,
       ));
+
+      // Auto-read next question if enabled
+      final settingsResult = await settingsRepository.getSettings();
+      final voiceResult = await settingsRepository.getSelectedVoice();
+      voiceResult.fold(
+        (_) {},
+        (voice) {
+          settingsResult.fold(
+            (_) {},
+            (settings) {
+              if (settings.autoPlayAudio) {
+                developer.log('InterviewBloc: Auto-reading next question with TTS', name: 'InterviewBloc');
+                add(TextToSpeechEvent(
+                  text: _questions[_currentQuestionIndex].question,
+                  voice: voice,
+                ));
+              }
+            },
+          );
+        },
+      );
     } else {
       add(const CompleteInterviewEvent());
     }
